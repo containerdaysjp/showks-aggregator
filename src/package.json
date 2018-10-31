@@ -1,0 +1,20 @@
+{
+  "name": "showks-webapp",
+  "version": "0.1.0",
+  "description": "A simple collaborative whiteboard using socket.io",
+  "main": "app.js",
+  "keywords": [
+    "Japan Container Days",
+    "JKD"
+  ],
+  "dependencies": {
+    "express": "4.x.x",
+    "socket.io": "latest",
+    "canvas": "latest"
+  },
+  "scripts": {
+    "start": "node app"
+  },
+  "author": "Koji Hatanaka",
+  "license": "MIT"
+}
