@@ -5,30 +5,12 @@ const io = require('socket.io')(http);
 const instanceNamespace = io.of('/instance');
 const port = process.env.PORT || 8081;
 
-// Create a canvas for server-side drawing
-const Canvas = require('canvas');
-const canvas = new Canvas(CANVAS_WIDTH, CANVAS_HEIGHT);
-const ctx = canvas.getContext('2d');
-const thCanvas = new Canvas(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
-const thCtx = thCanvas.getContext('2d');
+// Kubernetes Client
+const k8s = require('@kubernetes/client-node');
+const apiEndpoint = '/api/v1/watch/namespaces/default/services';
 
-var instances = [
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00001'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00002'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00003'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00004'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00005'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00006'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00007'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00008'},
-  {'id': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ00009'}
-];
-
-var nextId = 10;
-
-// Fill the background
-ctx.fillStyle="white";
-ctx.fillRect(0, 0, canvas.width, canvas.height);
+// Instances
+let instances = {};
 
 // Setup the express web app
 
@@ -43,10 +25,6 @@ app.get('/instances', function (req, res) {
 
 // GET /thumbnail
 app.get('/:id/thumbnail', function (req, res) {
-  thCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, thCanvas.width, thCanvas.height);
-  res.type("png");
-  let stream = thCanvas.createPNGStream();
-  stream.pipe(res);
 })
 
 // GET /author
@@ -74,12 +52,35 @@ instanceNamespace.on('connection', onInstanceConnection);
 // Start listening on the port for HTTP request
 http.listen(port, () => console.log('listening on port ' + port));
 
-// Start timer for dummy data
-setInterval(function () {
-  if (0.8 < Math.random()) {
-    let id = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + ('00000' + nextId).slice();
-    instances.push({'id': id});
-    commandNamespace.emit('updated', id);
-    ++nextId;
-  }
-}, 300)
+// Start watching Kubernetes cluster
+const kc = new k8s.KubeConfig();
+kc.loadFromDefault();
+//kc.loadFromFile(`${process.env.HOME}/.kube/config`)
+let watch = new k8s.Watch(kc);
+let req = watch.watch(
+  apiEndpoint,
+  {},
+  (type, obj) => {
+    if (type == 'ADDED') {
+      console.log('new object:');
+      instances[obj.metadata.name] = obj;
+      commandNamespace.emit('updated', obj.metadata.name);
+    } else if (type == 'MODIFIED') {
+      console.log('changed object:')
+      instances[obj.metadata.name] = obj;
+      commandNamespace.emit('updated', obj.metadata.name);
+    } else if (type == 'DELETED') {
+      console.log('deleted object:');
+      delete instances[obj.metadata.name];
+      commandNamespace.emit('deleted', obj.metadata.name);
+    } else {
+      console.log('unknown type: ' + type);
+    }
+    console.log(obj);
+  },
+  // done callback is called if the watch terminates normally
+  (err) => {
+      if (err) {
+          console.log(err);
+      }
+  });

@@ -1,16 +1,16 @@
 {
-  "name": "showks-webapp",
+  "name": "showks-aggregator",
   "version": "0.1.0",
-  "description": "A simple collaborative whiteboard using socket.io",
+  "description": "An aggregator",
   "main": "app.js",
   "keywords": [
     "Japan Container Days",
     "JKD"
   ],
   "dependencies": {
+    "@kubernetes/client-node": "^0.7.1",
     "express": "4.x.x",
-    "socket.io": "latest",
-    "canvas": "latest"
+    "socket.io": "latest"
   },
   "scripts": {
     "start": "node app"
