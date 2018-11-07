@@ -4,6 +4,7 @@ FROM node:8-alpine
 WORKDIR /usr/src/app
 
 # Install app dependencies (production only)
+COPY src/package*.json ./
 RUN npm install --only=production
 
 # Bundle app source
