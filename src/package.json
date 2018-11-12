@@ -8,9 +8,10 @@
     "JKD"
   ],
   "dependencies": {
-    "@kubernetes/client-node": "^0.7.1",
-    "express": "4.x.x",
-    "socket.io": "latest"
+    "@kubernetes/client-node": "latest",
+    "express": ">=4.5.0",
+    "socket.io": "latest",
+    "got": "latest"
   },
   "scripts": {
     "start": "node app"

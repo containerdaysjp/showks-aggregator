@@ -1,3 +1,4 @@
+const got = require('got');
 const express = require('express');
 const app = express();
 const http = require('http').Server(app);
@@ -7,7 +8,8 @@ const port = process.env.PORT || 8081;
 
 // Kubernetes Client
 const k8s = require('@kubernetes/client-node');
-const apiEndpoint = '/api/v1/watch/namespaces/default/services';
+const k8sApiEndpoint = '/api/v1/watch/namespaces/showks/services';
+//const k8sApiEndpoint = '/apis/apps/v1/watch/namespaces/showks/deployments';
 
 // Instances
 let instances = {};
@@ -54,29 +56,36 @@ http.listen(port, () => console.log('listening on port ' + port));
 
 // Start watching Kubernetes cluster
 const kc = new k8s.KubeConfig();
-kc.loadFromDefault();
-//kc.loadFromFile(`${process.env.HOME}/.kube/config`)
+kc.loadFromCluster();
+
 let watch = new k8s.Watch(kc);
 let req = watch.watch(
-  apiEndpoint,
+  k8sApiEndpoint,
   {},
   (type, obj) => {
     if (type == 'ADDED') {
       console.log('new object:');
       instances[obj.metadata.name] = obj;
-      commandNamespace.emit('updated', obj.metadata.name);
+//      commandNamespace.emit('updated', obj.metadata.name);
     } else if (type == 'MODIFIED') {
       console.log('changed object:')
       instances[obj.metadata.name] = obj;
-      commandNamespace.emit('updated', obj.metadata.name);
+//      commandNamespace.emit('updated', obj.metadata.name);
     } else if (type == 'DELETED') {
       console.log('deleted object:');
       delete instances[obj.metadata.name];
-      commandNamespace.emit('deleted', obj.metadata.name);
+//      commandNamespace.emit('deleted', obj.metadata.name);
     } else {
       console.log('unknown type: ' + type);
     }
     console.log(obj);
+    let host = obj.spec.clusterIP;
+    let port = obj.spec.ports[0].port;
+    got(`http://${host}:${port}`, {})
+    .then(response => {
+      console.log('responce: ' + response.body);
+    }).catch(error => {
+    });
   },
   // done callback is called if the watch terminates normally
   (err) => {
