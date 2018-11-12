@@ -80,7 +80,7 @@ let watch = new k8s.Watch(kc);
 let req = watch.watch(
   k8sApiEndpoint,
   {
-    labelSelector: 'app=canvas'
+    labelSelector: 'app=showks-canvas'
   },
   (type, obj) => {
     try {
