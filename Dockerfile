@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 # Install app dependencies (production only)
 COPY src/package*.json ./
 RUN npm install --only=production
-RUN touch /amsy810
+RUN touch /final-amsy810
 
 # Bundle app source
 COPY src .
