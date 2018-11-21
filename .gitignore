@@ -61,3 +61,4 @@ typings/
 .next
 
 update.sh
+copy.sh
