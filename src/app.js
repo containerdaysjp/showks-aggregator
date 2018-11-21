@@ -1,4 +1,5 @@
-const LABEL_SELECTOR = 'app=showks-canvas';
+const K8S_NAMESPACE = 'showks';
+const K8S_LABEL_SELECTOR = 'app=showks-canvas';
 
 const got = require('got');
 const express = require('express');
@@ -11,13 +12,28 @@ const port = process.env.PORT || 8081;
 
 // Kubernetes Client
 const k8s = require('@kubernetes/client-node');
-const k8sApiEndpoint = '/api/v1/watch/namespaces/showks/services';
+const k8sApiEndpoint = `/api/v1/watch/namespaces/${K8S_NAMESPACE}/services`;
 const kc = new k8s.KubeConfig();
 kc.loadFromCluster();
 
 
 // Instances
 let instances = {};
+
+function addInstance(obj) {
+  let id = obj.metadata.name;
+  instances[id] = getInstanceDetails(obj);
+  instanceNamespace.emit('updated', id);
+  console.log(`Added ${id}`);
+}
+
+function deleteInstance(obj) {
+  let id = obj.metadata.name;
+  delete instances[id];
+  instanceNamespace.emit('deleted', id);
+  console.log(`Deleted ${id}`);
+}
+
 
 // Helper functions
 function getServiceUrl(obj) {
@@ -83,41 +99,61 @@ instanceNamespace.on('connection', onInstanceConnection);
 // Start listening on the port for HTTP request
 http.listen(port, () => console.log('listening on port ' + port));
 
-// Start watching Kubernetes cluster
-let watch = new k8s.Watch(kc);
-let req = watch.watch(
-  k8sApiEndpoint,
-  {
-    labelSelector: LABEL_SELECTOR
-  },
-  (type, obj) => {
-    try {
-      if (type == 'ADDED' || type == 'MODIFIED') {
-        console.log('added or modified object:');
-        let id = obj.metadata.name;
-        instances[id] = getInstanceDetails(obj);
-        instanceNamespace.emit('updated', id);
 
-      } else if (type == 'DELETED') {
-        console.log('deleted object:');
-        let id = obj.metadata.name;
-        delete instances[id];
-        instanceNamespace.emit('deleted', id);
+// Get list of services
+const k8sApi = kc.makeApiClient(k8s.Core_v1Api);
+//  public listNamespacedService (namespace: string, pretty?: string, _continue?: string, fieldSelector?: string, includeUninitialized?: boolean, labelSelector?: string, limit?: number, resourceVersion?: string, timeoutSeconds?: number, watch?: boolean) : Promise<{ response: http.IncomingMessage; body: V1ServiceList;  }>
+k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, false, K8S_LABEL_SELECTOR)
+.then((res) => {
+  // console.log(res.body);
+  try {
+    let resourceVersion = res.body.metadata.resourceVersion;
+    console.log(`Retrieved service list (resourceVersion: ${resourceVersion})`);
+    let items = res.body.items;
+    items.forEach((obj) => {
+      addInstance(obj);
+    });
+    return resourceVersion;
+  } catch (err) {
+    console.log('an error occurred on parsing service list');
+    console.log(err);
+  }
+})
+.then((resourceVersion) => {
+  // Start watching Kubernetes cluster
+  console.log(`Start watching Kubernetes cluster from resourceVersion: ${resourceVersion}`);
+  let watch = new k8s.Watch(kc);
+  let req = watch.watch(
+    k8sApiEndpoint,
+    {
+      labelSelector: K8S_LABEL_SELECTOR,
+      resourceVersion: resourceVersion
+    },
+    (type, obj) => {
+      // console.log(obj);  
+      try {
+        if (type == 'ADDED' || type == 'MODIFIED') {
+          // console.log('added or modified object:');
+          addInstance(obj);
 
-      } else {
-        console.log('unknown type: ' + type);
+        } else if (type == 'DELETED') {
+          // console.log('deleted object:');
+          deleteInstance(obj);
 
+        } else {
+          console.log('unknown type: ' + type);
+
+        }
+      } catch (err) {
+        console.log('an error occurred on parsing service object');
+        console.log(err);
       }
-      console.log(obj);  
-    } catch (err) {
-      console.log('an error occurred on parsing service object');
-      console.log(err);
-    }
-  },
-  // done callback is called if the watch terminates normally
-  (error) => {
-      if (error) {
-        console.log('an error occurred in the watch callback');
-        console.log(error);
-      }
-  });
+    },
+    // done callback is called if the watch terminates normally
+    (error) => {
+        if (error) {
+          console.log('an error occurred in the watch callback');
+          console.log(error);
+        }
+    });
+});
