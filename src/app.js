@@ -1,5 +1,6 @@
 const K8S_NAMESPACE = 'showks';
 const K8S_LABEL_SELECTOR = 'app=showks-canvas';
+const REFRESH_THRESHOLD = 6000;
 
 const got = require('got');
 const express = require('express');
@@ -15,23 +16,74 @@ const k8s = require('@kubernetes/client-node');
 const k8sApiEndpoint = `/api/v1/watch/namespaces/${K8S_NAMESPACE}/services`;
 const kc = new k8s.KubeConfig();
 kc.loadFromCluster();
+//kc.loadFromDefault();
 
 
 // Instances
 let instances = {};
+let instanceCache = {};
 
 function addInstance(obj) {
   let id = obj.metadata.name;
   instances[id] = getInstanceDetails(obj);
+  deleteCache(id);
   instanceNamespace.emit('updated', id);
   console.log(`Added ${id}`);
+}
+
+function updateInstance(obj) {
+  let id = obj.metadata.name;
+  instances[id] = getInstanceDetails(obj);
+  deleteCache(id);
+  instanceNamespace.emit('updated', id);
+  console.log(`Updated ${id}`);
 }
 
 function deleteInstance(obj) {
   let id = obj.metadata.name;
   delete instances[id];
+  deleteCache(id);
   instanceNamespace.emit('deleted', id);
   console.log(`Deleted ${id}`);
+}
+
+function deleteCache(id) {
+  delete instanceCache[id];
+}
+
+function getValidCache(id, path, timestamp) {
+  if (instanceCache[id] === undefined) {
+    console.log(`There is no cache saved for ${id}`);
+    return undefined;
+  }  
+  let cache = instanceCache[id][path];
+  if (
+    cache === undefined ||
+    REFRESH_THRESHOLD < (timestamp - cache.lastFetched)) {
+      console.log(`Cache has been expired for ${id}, ${path}`);
+      return undefined;
+  }
+  console.log(`Retruning cached data for ${id}, ${path}`);
+  return cache;
+}
+
+function setCache(id, path, lastFetched, contentType, data) {
+  if (instanceCache[id] === undefined) {
+    instanceCache[id] = {};
+  }
+  let cache = {
+    lastFetched: lastFetched,
+    contentType: contentType,
+    data: data
+  }
+  instanceCache[id][path] = cache;
+  return cache;
+}
+
+function requestInstance(id, path) {
+  let url = instances[id].url + path;
+  console.log(`accessing ${url}`);
+  return got(url);
 }
 
 
@@ -50,16 +102,23 @@ function getInstanceDetails(obj) {
   return instance;
 }
 
-// Pipe remote response to the HTTP client
-function responseRemote(req, res, path) {
+// Response to the HTTP client with remote data
+async function responseRemote(req, res, path, onlyIfCached) {
   console.log(`/${req.params.id}${path} called`);
+  let id = req.params.id;
   try {
-    let instance = instances[req.params.id];
-    let url = instance.url + path;
-    console.log(`accessing ${url}`);
-    got.stream(url).pipe(res);
+    // Retrieve remote data
+    let cache = getValidCache(id, path, onlyIfCached ? 0 : Date.now());
+    if (cache === undefined) {
+      const response = await requestInstance(id, path);
+      cache = setCache(id, path, Date.now(), response.headers['content-type'], response.body);
+    }
+
+    // Response to the client
+    res.set('Content-type', cache.contentType); 
+    res.send(cache.data);
   } catch (err) {
-    console.log(`an error occurred on getting instance in /${req.params.id}${path}`);
+    console.log(`an error occurred on getting instance in /${id}${path}`);
     console.log(err);
     res.status(404).send("Page not found")
   }
@@ -74,14 +133,22 @@ app.get('/instances', function (req, res) {
   res.send(JSON.stringify(instances));
 })
 
+/* This endpoint is for debug purpose only
+// GET /instanceCache
+app.get('/cache', function (req, res) {
+  res.type("json");
+  res.send(JSON.stringify(instanceCache));
+})
+*/
+
 // GET /thumbnail
 app.get('/:id/thumbnail', function (req, res) {
-  responseRemote(req, res, '/thumbnail');
+  responseRemote(req, res, '/thumbnail', false);
 })
 
 // GET /author
 app.get('/:id/author', function (req, res) {
-  responseRemote(req, res, '/author');
+  responseRemote(req, res, '/author', true);
 })
 
 // socket.io connection handler
@@ -132,12 +199,16 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
     (type, obj) => {
       // console.log(obj);  
       try {
-        if (type == 'ADDED' || type == 'MODIFIED') {
-          // console.log('added or modified object:');
+        if (type == 'ADDED') {
+          console.log('new instance was added');
           addInstance(obj);
 
+        } else if (type == 'MODIFIED') {
+          console.log('an instance was modified');
+          updateInstance(obj);
+
         } else if (type == 'DELETED') {
-          // console.log('deleted object:');
+          console.log('an instance has beed deleted');
           deleteInstance(obj);
 
         } else {
