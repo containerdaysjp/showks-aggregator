@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Chart.Name }}
+  namespace: showks
   labels:
     app: {{ .Chart.Name }}
 spec:
@@ -19,5 +20,5 @@ spec:
           image: containerdaysjp/{{ .Chart.Name }}:{{ .Values.image.tag }}
           ports:
             - name: app-port
-              containerPort: 8080
+              containerPort: 8081
               protocol: TCP
