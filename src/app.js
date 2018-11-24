@@ -82,10 +82,10 @@ function setCache(id, path, lastFetched, contentType, data) {
   return cache;
 }
 
-function requestInstance(id, path) {
+function requestInstance(id, path, options) {
   let url = instances[id].url + path;
   console.log(`accessing ${url}`);
-  return got(url);
+  return got(url, options);
 }
 
 
@@ -123,14 +123,14 @@ function getInstanceList() {
 }
 
 // Response to the HTTP client with remote data
-async function responseRemote(req, res, path, onlyIfCached) {
+async function responseRemote(req, res, path, onlyIfCached, options) {
   console.log(`/${req.params.id}${path} called`);
   let id = req.params.id;
   try {
     // Retrieve remote data
     let cache = getValidCache(id, path, onlyIfCached ? 0 : Date.now());
     if (cache === undefined) {
-      const response = await requestInstance(id, path);
+      const response = await requestInstance(id, path, options);
       cache = setCache(id, path, Date.now(), response.headers['content-type'], response.body);
     }
 
@@ -169,12 +169,12 @@ app.get('/cache', function (req, res) {
 
 // GET /thumbnail
 app.get('/:id/thumbnail', function (req, res) {
-  responseRemote(req, res, '/thumbnail', false);
+  responseRemote(req, res, '/thumbnail', false, { encoding: null, json: false });
 })
 
 // GET /author
 app.get('/:id/author', function (req, res) {
-  responseRemote(req, res, '/author', true);
+  responseRemote(req, res, '/author', true, { encoding: 'utf8', json: true });
 })
 
 // socket.io connection handler
