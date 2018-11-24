@@ -12,12 +12,12 @@ spec:
       paths:
       - path: /
         backend:
-          serviceName: {{ .Chart.Name }}
+          serviceName: {{ .Chart.Name }}{{ .Values.nameSuffix }}
           servicePort: 8081
   - host: aggregator.prod.showks.containerdays.jp
     http:
       paths:
       - path: /
         backend:
-          serviceName: {{ .Chart.Name }}
+          serviceName: {{ .Chart.Name }}{{ .Values.nameSuffix }}
           servicePort: 8081
