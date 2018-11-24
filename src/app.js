@@ -84,7 +84,7 @@ function setCache(id, path, lastFetched, contentType, data) {
 
 function requestInstance(id, path, options) {
   let url = instances[id].url + path;
-  console.log(`accessing ${url}`);
+  console.log(`Requesting ${url}`);
   return got(url, options);
 }
 
@@ -102,20 +102,47 @@ function getCreationTimestamp(obj) {
 }
 
 function getInstanceDetails(obj) {
+  let id = obj.metadata.name;
   let instance = {
-    id: obj.metadata.name,
+    id: id,
     url: getServiceUrl(obj),
+    thumbnailUrl: `/${id}/thumbnail`,
     createdAt: getCreationTimestamp(obj)
   }
   return instance;
 }
 
+// Fetch remote data
+async function fetchRemote(id, path, onlyIfCached, options) {
+  // Retrieve remote data
+  let cache = getValidCache(id, path, onlyIfCached ? 0 : Date.now());
+  if (cache === undefined) {
+    const response = await requestInstance(id, path, options);
+    cache = setCache(id, path, Date.now(), response.headers['content-type'], response.body);
+  }
+  return cache;
+}
+
 // Generate instance array ordered by createdAt desc
-function getInstanceList() {
+async function getInstanceList() {
   let list = [];
-  Object.keys(instances).forEach((key) => {
-    list.push(instances[key]);
-  });
+  let keys = Object.keys(instances);
+  for (let key of keys) {
+    let instance = instances[key];
+    try {
+      let authorCache = await fetchRemote(instance.id, '/author', true, { encoding: 'utf8', json: true });
+      let item = {
+        id: instance.id,
+//        linkUrl: instance.linkUrl,
+        thumbnailUrl: instance.thumbnailUrl,
+        author: authorCache.data,
+        createdAt: instance.createdAt
+      }
+      list.push(item);
+    } catch (err) {
+      // simply ignore the instance
+    }
+  };
   list.sort((a, b) => {
     return b.createdAt - a.createdAt;
   });
@@ -128,11 +155,7 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
   let id = req.params.id;
   try {
     // Retrieve remote data
-    let cache = getValidCache(id, path, onlyIfCached ? 0 : Date.now());
-    if (cache === undefined) {
-      const response = await requestInstance(id, path, options);
-      cache = setCache(id, path, Date.now(), response.headers['content-type'], response.body);
-    }
+    let cache = await fetchRemote(id, path, onlyIfCached, options);
 
     // Response to the client
     res.set('Content-type', cache.contentType); 
@@ -144,14 +167,16 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
   }
 }
 
+
 // GET /
 app.use(express.static(__dirname + '/public'));
 
 // GET /instances
-app.get('/instances', function (req, res) {
+app.get('/instances', async function (req, res) {
   try {
+    let list = await getInstanceList();
     res.type("json");
-    res.send(JSON.stringify(getInstanceList()));  
+    res.send(JSON.stringify(list));  
   } catch (err) {
     console.log(`an error occurred on getting instance list`);
     console.log(err);
@@ -214,6 +239,26 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
   }
 })
 .then((resourceVersion) => {
+  /*
+  // public listNamespacedIngress (namespace: string, pretty?: string, _continue?: string, fieldSelector?: string, includeUninitialized?: boolean, labelSelector?: string, limit?: number, resourceVersion?: string, timeoutSeconds?: number, watch?: boolean) : Promise<{ response: http.IncomingMessage; body: V1beta1IngressList;  }>
+  k8sApi.listNamespacedIngress(K8S_NAMESPACE, undefined, undefined, undefined, false, K8S_LABEL_SELECTOR)
+  .then((res) => {
+    console.log(res.body);
+    try {
+      let resourceVersion = res.body.metadata.resourceVersion;
+      console.log(`Retrieved service list (resourceVersion: ${resourceVersion})`);
+      let items = res.body.items;
+      items.forEach((obj) => {
+        // console.log(obj);  
+        addInstance(obj);
+      });
+      return resourceVersion;
+    } catch (err) {
+      console.log('an error occurred on parsing service list');
+      console.log(err);
+    }
+  })*/  
+
   // Start watching Kubernetes cluster
   console.log(`Start watching Kubernetes cluster from resourceVersion: ${resourceVersion}`);
   let watch = new k8s.Watch(kc);
