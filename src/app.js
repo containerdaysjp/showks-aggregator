@@ -70,7 +70,7 @@ function getValidCache(id, path, timestamp) {
       console.log(`Cache has been expired for ${id}, ${path}`);
       return undefined;
   }
-  console.log(`Retruning cached data for ${id}, ${path}`);
+  console.log(`Returning cached data for ${id}, ${path}`);
   return cache;
 }
 
@@ -96,7 +96,7 @@ function requestInstance(id, path, options) {
 // Set Link URL from ingress object
 function setInstanceLinkUrl(obj) {
   let id = obj.metadata.name;
-  let linkUrl = obj.spec.rules[0].host;
+  let linkUrl = getLinkUrl(obj);
   instances[id].linkUrl = linkUrl;
   console.log(`Link URL ${linkUrl} set in ${id}`);
 }
@@ -107,8 +107,9 @@ async function fetchLinkUrl(id) {
   // public readNamespacedIngress (name: string, namespace: string, pretty?: string, exact?: boolean, _export?: boolean) : Promise<{ response: http.IncomingMessage; body: V1beta1Ingress;  }>
   let res = await k8sExtentionsApi.readNamespacedIngress(id, K8S_NAMESPACE, undefined, true);
   let obj = res.body;
-  // console.log(obj.spec.rules);
-  return obj.spec.rules[0].host;
+  let linkUrl = getLinkUrl(obj);
+  console.log(`Link URL ${linkUrl} fetched for ${id}`);
+  return linkUrl;
 }
 
 
@@ -117,6 +118,10 @@ function getServiceUrl(obj) {
   let host = obj.spec.clusterIP;
   let port = obj.spec.ports[0].port;
   return `http://${host}:${port}`;
+}
+
+function getLinkUrl(obj) {
+  return `http://${obj.spec.rules[0].host}`;
 }
 
 function getCreationTimestamp(obj) {
@@ -167,7 +172,7 @@ async function getInstanceList() {
       list.push(item);
     } catch (err) {
       // simply ignore the instance
-      console.log(`an error occurred on processing item ${id}`);
+      console.log(`An error occurred on processing item ${id}`);
       console.log(err);
     }
   };
@@ -189,7 +194,7 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
     res.set('Content-type', cache.contentType);
     res.send(cache.data);
   } catch (err) {
-    console.log(`an error occurred on getting instance in /${id}${path}`);
+    console.log(`An error occurred on getting instance in /${id}${path}`);
     console.log(err);
     res.status(404).send("Page not found")
   }
@@ -214,7 +219,7 @@ app.get('/instances', async function (req, res) {
     res.type("json");
     res.send(JSON.stringify(list));
   } catch (err) {
-    console.log(`an error occurred on getting instance list`);
+    console.log(`An error occurred on getting instance list`);
     console.log(err);
     res.status(404).send("Page not found")
   }
@@ -280,30 +285,30 @@ function watchService(resourceVersion) {
       // console.log(obj);
       try {
         if (type == 'ADDED') {
-          console.log('new instance was added');
+          console.log('New instance was added');
           addInstance(obj);
 
         } else if (type == 'MODIFIED') {
-          console.log('an instance was modified');
+          console.log('An instance was modified');
           updateInstance(obj);
 
         } else if (type == 'DELETED') {
-          console.log('an instance has beed deleted');
+          console.log('An instance has beed deleted');
           deleteInstance(obj);
 
         } else {
-          console.log('unknown type: ' + type);
+          console.log('Unknown type: ' + type);
 
         }
       } catch (err) {
-        console.log('an error occurred on parsing service object');
+        console.log('An error occurred on parsing service object');
         console.log(err);
       }
     },
     // done callback is called if the watch terminates normally
     (error) => {
         if (error) {
-          console.log('an error occurred in the watch callback');
+          console.log('An error occurred in the watch callback');
           console.log(error);
         }
     });
@@ -326,6 +331,6 @@ function watchService(resourceVersion) {
   // Start watching Kubernetes cluster
   watchService(resourceVersion);
 })().catch((err) => {
-  console.log('an error occurred');
+  console.log('An error occurred');
   console.log(err);
 });
