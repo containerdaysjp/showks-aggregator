@@ -1,3 +1,5 @@
+'use strict';
+
 const K8S_NAMESPACE = 'showks';
 const K8S_LABEL_SELECTOR = 'app=showks-canvas';
 const REFRESH_THRESHOLD = 6000;
@@ -94,12 +96,30 @@ function getServiceUrl(obj) {
   return `http://${host}:${port}`;
 }
 
+function getCreationTimestamp(obj) {
+  let date = new Date(obj.metadata.creationTimestamp);
+  return date.getTime();
+}
+
 function getInstanceDetails(obj) {
   let instance = {
     id: obj.metadata.name,
-    url: getServiceUrl(obj)
+    url: getServiceUrl(obj),
+    createdAt: getCreationTimestamp(obj)
   }
   return instance;
+}
+
+// Generate instance array ordered by createdAt desc
+function getInstanceList() {
+  let list = [];
+  Object.keys(instances).forEach((key) => {
+    list.push(instances[key]);
+  });
+  list.sort((a, b) => {
+    return b.createdAt - a.createdAt;
+  });
+  return list;
 }
 
 // Response to the HTTP client with remote data
@@ -129,8 +149,14 @@ app.use(express.static(__dirname + '/public'));
 
 // GET /instances
 app.get('/instances', function (req, res) {
-  res.type("json");
-  res.send(JSON.stringify(instances));
+  try {
+    res.type("json");
+    res.send(JSON.stringify(getInstanceList()));  
+  } catch (err) {
+    console.log(`an error occurred on getting instance list`);
+    console.log(err);
+    res.status(404).send("Page not found")
+  }
 })
 
 /* This endpoint is for debug purpose only
@@ -178,6 +204,7 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
     console.log(`Retrieved service list (resourceVersion: ${resourceVersion})`);
     let items = res.body.items;
     items.forEach((obj) => {
+      console.log(obj);  
       addInstance(obj);
     });
     return resourceVersion;
