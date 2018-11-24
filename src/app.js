@@ -11,7 +11,10 @@ const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const instanceNamespace = io.of('/instance');
 const port = process.env.PORT || 8081;
-
+const allowHost =
+  process.env.ALLOW_HOST !== undefined && process.env.ALLOW_HOST !== ""
+    ? process.env.ALLOW_HOST
+    : "http://localhost:3000";
 
 // Kubernetes Client
 const k8s = require('@kubernetes/client-node');
@@ -57,7 +60,7 @@ function getValidCache(id, path, timestamp) {
   if (instanceCache[id] === undefined) {
     console.log(`There is no cache saved for ${id}`);
     return undefined;
-  }  
+  }
   let cache = instanceCache[id][path];
   if (
     cache === undefined ||
@@ -135,7 +138,7 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
     }
 
     // Response to the client
-    res.set('Content-type', cache.contentType); 
+    res.set('Content-type', cache.contentType);
     res.send(cache.data);
   } catch (err) {
     console.log(`an error occurred on getting instance in /${id}${path}`);
@@ -144,6 +147,13 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
   }
 }
 
+app.use(function(req, res, next) {
+  res.header("Access-Control-Allow-Origin", allowHost);
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Credentials", true);
+  next();
+});
+
 // GET /
 app.use(express.static(__dirname + '/public'));
 
@@ -151,7 +161,7 @@ app.use(express.static(__dirname + '/public'));
 app.get('/instances', function (req, res) {
   try {
     res.type("json");
-    res.send(JSON.stringify(getInstanceList()));  
+    res.send(JSON.stringify(getInstanceList()));
   } catch (err) {
     console.log(`an error occurred on getting instance list`);
     console.log(err);
@@ -204,7 +214,7 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
     console.log(`Retrieved service list (resourceVersion: ${resourceVersion})`);
     let items = res.body.items;
     items.forEach((obj) => {
-      // console.log(obj);  
+      // console.log(obj);
       addInstance(obj);
     });
     return resourceVersion;
@@ -224,7 +234,7 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
       resourceVersion: resourceVersion
     },
     (type, obj) => {
-      // console.log(obj);  
+      // console.log(obj);
       try {
         if (type == 'ADDED') {
           console.log('new instance was added');
