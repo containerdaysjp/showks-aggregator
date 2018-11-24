@@ -275,6 +275,9 @@ async function fillLinkUrl() {
 function watchService(resourceVersion) {
   console.log(`Start watching services from resourceVersion: ${resourceVersion}`);
   let watch = new k8s.Watch(kc);
+  // public watch(path: string, queryParams: any,
+  // callback: (phase: string, obj: any) => void,
+  // done: (err: any) => void): any
   let req = watch.watch(
     k8sApiEndpoint,
     {
@@ -311,6 +314,8 @@ function watchService(resourceVersion) {
           console.log('An error occurred in the watch callback');
           console.log(error);
         }
+        console.log('Watch terminated. Aborting...');
+        process.exit(1);
     });
 }
 
@@ -333,4 +338,6 @@ function watchService(resourceVersion) {
 })().catch((err) => {
   console.log('An error occurred');
   console.log(err);
+  console.log('Aborting...');
+  process.exit(1);
 });
