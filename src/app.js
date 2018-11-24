@@ -11,7 +11,10 @@ const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const instanceNamespace = io.of('/instance');
 const port = process.env.PORT || 8081;
-
+const allowHost =
+  process.env.ALLOW_HOST !== undefined && process.env.ALLOW_HOST !== ""
+    ? process.env.ALLOW_HOST
+    : "http://localhost:3000";
 
 // Kubernetes Client
 const k8s = require('@kubernetes/client-node');
@@ -59,7 +62,7 @@ function getValidCache(id, path, timestamp) {
   if (instanceCache[id] === undefined) {
     console.log(`There is no cache saved for ${id}`);
     return undefined;
-  }  
+  }
   let cache = instanceCache[id][path];
   if (
     cache === undefined ||
@@ -134,7 +137,6 @@ function getInstanceDetails(obj) {
 
 // Fetch remote data
 async function fetchRemote(id, path, onlyIfCached, options) {
-  // Retrieve remote data
   let cache = getValidCache(id, path, onlyIfCached ? 0 : Date.now());
   if (cache === undefined) {
     const response = await requestInstance(id, path, options);
@@ -180,11 +182,11 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
   console.log(`/${req.params.id}${path} called`);
   let id = req.params.id;
   try {
-    // Retrieve remote data
+    // Fetch remote data
     let cache = await fetchRemote(id, path, onlyIfCached, options);
 
     // Response to the client
-    res.set('Content-type', cache.contentType); 
+    res.set('Content-type', cache.contentType);
     res.send(cache.data);
   } catch (err) {
     console.log(`an error occurred on getting instance in /${id}${path}`);
@@ -195,6 +197,12 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
 
 
 // Express handlers
+app.use(function(req, res, next) {
+  res.header("Access-Control-Allow-Origin", allowHost);
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Credentials", true);
+  next();
+});
 
 // GET /
 app.use(express.static(__dirname + '/public'));
@@ -204,7 +212,7 @@ app.get('/instances', async function (req, res) {
   try {
     let list = await getInstanceList();
     res.type("json");
-    res.send(JSON.stringify(list));  
+    res.send(JSON.stringify(list));
   } catch (err) {
     console.log(`an error occurred on getting instance list`);
     console.log(err);
@@ -268,8 +276,8 @@ function watchService(resourceVersion) {
       labelSelector: K8S_LABEL_SELECTOR,
       resourceVersion: resourceVersion
     },
-    async (type, obj) => {
-      // console.log(obj);  
+    (type, obj) => {
+      // console.log(obj);
       try {
         if (type == 'ADDED') {
           console.log('new instance was added');
