@@ -19,6 +19,8 @@ const k8sApiEndpoint = `/api/v1/watch/namespaces/${K8S_NAMESPACE}/services`;
 const kc = new k8s.KubeConfig();
 kc.loadFromCluster();
 //kc.loadFromDefault();
+const k8sApi = kc.makeApiClient(k8s.Core_v1Api);
+const k8sExtentionsApi = kc.makeApiClient(k8s.Extensions_v1beta1Api);
 
 
 // Instances
@@ -88,6 +90,24 @@ function requestInstance(id, path, options) {
   return got(url, options);
 }
 
+// Set Link URL from ingress object
+function setInstanceLinkUrl(obj) {
+  let id = obj.metadata.name;
+  let linkUrl = obj.spec.rules[0].host;
+  instances[id].linkUrl = linkUrl;
+  console.log(`Link URL ${linkUrl} set in ${id}`);
+}
+
+// Fetch Link URL from ingress API
+async function fetchLinkUrl(id) {
+  console.log(`Fetching link URL of ${id}`);
+  // public readNamespacedIngress (name: string, namespace: string, pretty?: string, exact?: boolean, _export?: boolean) : Promise<{ response: http.IncomingMessage; body: V1beta1Ingress;  }>
+  let res = await k8sExtentionsApi.readNamespacedIngress(id, K8S_NAMESPACE, undefined, true);
+  let obj = res.body;
+  // console.log(obj.spec.rules);
+  return obj.spec.rules[0].host;
+}
+
 
 // Helper functions
 function getServiceUrl(obj) {
@@ -129,11 +149,15 @@ async function getInstanceList() {
   let keys = Object.keys(instances);
   for (let key of keys) {
     let instance = instances[key];
+    let id = instance.id;
     try {
-      let authorCache = await fetchRemote(instance.id, '/author', true, { encoding: 'utf8', json: true });
+      let authorCache = await fetchRemote(id, '/author', true, { encoding: 'utf8', json: true });
+      if (instance.linkUrl === undefined) {
+        instance.linkUrl = await fetchLinkUrl(id);
+      }
       let item = {
-        id: instance.id,
-//        linkUrl: instance.linkUrl,
+        id: id,
+        linkUrl: instance.linkUrl,
         thumbnailUrl: instance.thumbnailUrl,
         author: authorCache.data,
         createdAt: instance.createdAt
@@ -141,6 +165,8 @@ async function getInstanceList() {
       list.push(item);
     } catch (err) {
       // simply ignore the instance
+      console.log(`an error occurred on processing item ${id}`);
+      console.log(err);
     }
   };
   list.sort((a, b) => {
@@ -168,6 +194,8 @@ async function responseRemote(req, res, path, onlyIfCached, options) {
 }
 
 
+// Express handlers
+
 // GET /
 app.use(express.static(__dirname + '/public'));
 
@@ -184,14 +212,6 @@ app.get('/instances', async function (req, res) {
   }
 })
 
-/* This endpoint is for debug purpose only
-// GET /instanceCache
-app.get('/cache', function (req, res) {
-  res.type("json");
-  res.send(JSON.stringify(instanceCache));
-})
-*/
-
 // GET /thumbnail
 app.get('/:id/thumbnail', function (req, res) {
   responseRemote(req, res, '/thumbnail', false, { encoding: null, json: false });
@@ -202,7 +222,8 @@ app.get('/:id/author', function (req, res) {
   responseRemote(req, res, '/author', true, { encoding: 'utf8', json: true });
 })
 
-// socket.io connection handler
+
+// socket.io connection handlers
 function onInstanceConnection(socket) {
   console.log('Connected to instance namespace.');
 }
@@ -211,56 +232,35 @@ function onNotificationConnection(socket) {
   console.log('Connected to notification namespace.');
 }
 
-// Start listening socket.io
-instanceNamespace.on('connection', onInstanceConnection);
-
-// Start listening on the port for HTTP request
-http.listen(port, () => console.log('listening on port ' + port));
-
-
 // Get list of services
-const k8sApi = kc.makeApiClient(k8s.Core_v1Api);
-//  public listNamespacedService (namespace: string, pretty?: string, _continue?: string, fieldSelector?: string, includeUninitialized?: boolean, labelSelector?: string, limit?: number, resourceVersion?: string, timeoutSeconds?: number, watch?: boolean) : Promise<{ response: http.IncomingMessage; body: V1ServiceList;  }>
-k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, false, K8S_LABEL_SELECTOR)
-.then((res) => {
-  // console.log(res.body);
-  try {
-    let resourceVersion = res.body.metadata.resourceVersion;
-    console.log(`Retrieved service list (resourceVersion: ${resourceVersion})`);
-    let items = res.body.items;
-    items.forEach((obj) => {
-      // console.log(obj);  
-      addInstance(obj);
-    });
-    return resourceVersion;
-  } catch (err) {
-    console.log('an error occurred on parsing service list');
-    console.log(err);
-  }
-})
-.then((resourceVersion) => {
-  /*
-  // public listNamespacedIngress (namespace: string, pretty?: string, _continue?: string, fieldSelector?: string, includeUninitialized?: boolean, labelSelector?: string, limit?: number, resourceVersion?: string, timeoutSeconds?: number, watch?: boolean) : Promise<{ response: http.IncomingMessage; body: V1beta1IngressList;  }>
-  k8sApi.listNamespacedIngress(K8S_NAMESPACE, undefined, undefined, undefined, false, K8S_LABEL_SELECTOR)
-  .then((res) => {
-    console.log(res.body);
-    try {
-      let resourceVersion = res.body.metadata.resourceVersion;
-      console.log(`Retrieved service list (resourceVersion: ${resourceVersion})`);
-      let items = res.body.items;
-      items.forEach((obj) => {
-        // console.log(obj);  
-        addInstance(obj);
-      });
-      return resourceVersion;
-    } catch (err) {
-      console.log('an error occurred on parsing service list');
-      console.log(err);
-    }
-  })*/  
+async function getServiceList() {
+  console.log('Fetching service list');
+  // public listNamespacedServiceAccount (namespace: string, pretty?: string, _continue?: string, fieldSelector?: string, includeUninitialized?: boolean, labelSelector?: string, limit?: number, resourceVersion?: string, timeoutSeconds?: number, watch?: boolean) : Promise<{ response: http.IncomingMessage; body: V1ServiceAccountList;  }>
+  let res = await k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, false, K8S_LABEL_SELECTOR);
+  let resourceVersion = res.body.metadata.resourceVersion;
+  let items = res.body.items;
+  console.log(`Fetched service list (count: ${items.length}) (resourceVersion: ${resourceVersion})`);
+  items.forEach((obj) => {
+    addInstance(obj);
+  });
+  return resourceVersion;
+}
 
-  // Start watching Kubernetes cluster
-  console.log(`Start watching Kubernetes cluster from resourceVersion: ${resourceVersion}`);
+// Fill link URL
+async function fillLinkUrl() {
+  console.log('Fetching ingress list');
+  // public listNamespacedIngress (namespace: string, pretty?: string, _continue?: string, fieldSelector?: string, includeUninitialized?: boolean, labelSelector?: string, limit?: number, resourceVersion?: string, timeoutSeconds?: number, watch?: boolean) : Promise<{ response: http.IncomingMessage; body: V1beta1IngressList;  }>
+  let res = await k8sExtentionsApi.listNamespacedIngress(K8S_NAMESPACE, undefined, undefined, undefined, false, K8S_LABEL_SELECTOR);
+  let items = res.body.items;
+  console.log(`Fetched ingress list (count: ${items.length})`);
+  items.forEach((obj) => {
+    setInstanceLinkUrl(obj);
+  });
+}
+
+// Watch services
+function watchService(resourceVersion) {
+  console.log(`Start watching services from resourceVersion: ${resourceVersion}`);
   let watch = new k8s.Watch(kc);
   let req = watch.watch(
     k8sApiEndpoint,
@@ -268,7 +268,7 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
       labelSelector: K8S_LABEL_SELECTOR,
       resourceVersion: resourceVersion
     },
-    (type, obj) => {
+    async (type, obj) => {
       // console.log(obj);  
       try {
         if (type == 'ADDED') {
@@ -299,4 +299,25 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
           console.log(error);
         }
     });
+}
+
+// Entry point
+(async () => {
+  // Start listening socket.io
+  instanceNamespace.on('connection', onInstanceConnection);
+
+  // Start listening on the port for HTTP request
+  http.listen(port, () => console.log('Listening on port ' + port));
+
+  // Get service list
+  let resourceVersion = await getServiceList();
+
+  // Fill link URL
+  await fillLinkUrl();
+
+  // Start watching Kubernetes cluster
+  watchService(resourceVersion);
+})().catch((err) => {
+  console.log('an error occurred');
+  console.log(err);
 });
