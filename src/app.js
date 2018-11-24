@@ -1,7 +1,7 @@
 'use strict';
 
 const K8S_NAMESPACE = 'showks';
-const K8S_LABEL_SELECTOR = 'app=showks-canvas';
+const K8S_LABEL_SELECTOR = 'class=showks-canvas';
 const REFRESH_THRESHOLD = 6000;
 
 const got = require('got');
@@ -204,7 +204,7 @@ k8sApi.listNamespacedService(K8S_NAMESPACE, undefined, undefined, undefined, fal
     console.log(`Retrieved service list (resourceVersion: ${resourceVersion})`);
     let items = res.body.items;
     items.forEach((obj) => {
-      console.log(obj);  
+      // console.log(obj);  
       addInstance(obj);
     });
     return resourceVersion;
