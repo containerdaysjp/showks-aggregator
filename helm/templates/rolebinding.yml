@@ -5,8 +5,8 @@ metadata:
   name: {{ .Chart.Name }}-access
   namespace: showks
 rules:
-- apiGroups: ["","apps"]
-  resources: ["services","deployments"]
+- apiGroups: ["","apps","extensions"]
+  resources: ["services","deployments","ingresses"]
   verbs: ["get", "watch", "list"]
 
 ---
