@@ -18,6 +18,9 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           image: gcr.io/ipc-containerdays/{{ .Chart.Name }}:{{ .Values.image.tag }}
+          env:
+            - name: ALLOW_HOST
+              value: http://portal{{ .Values.vhostDomain }}
           ports:
             - name: app-port
               containerPort: 8081
