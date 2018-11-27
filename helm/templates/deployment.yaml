@@ -19,8 +19,13 @@ spec:
         - name: {{ .Chart.Name }}
           image: gcr.io/ipc-containerdays/{{ .Chart.Name }}:{{ .Values.image.tag }}
           env:
+            - name: DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: showks-config
+                  key: domain
             - name: ALLOW_HOST
-              value: http://portal{{ .Values.vhostDomain }}
+              value: http://portal$(DOMAIN)
           ports:
             - name: app-port
               containerPort: 8081
