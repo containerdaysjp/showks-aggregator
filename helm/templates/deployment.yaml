@@ -4,19 +4,19 @@ metadata:
   name: {{ .Chart.Name }}{{ .Values.nameSuffix }}
   namespace: showks
   labels:
-    app: {{ .Chart.Name }}
+    app: {{ .Chart.Name }}{{ .Values.nameSuffix }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Chart.Name }}
+      app: {{ .Chart.Name }}{{ .Values.nameSuffix }}
   template:
     metadata:
       labels:
-        app: {{ .Chart.Name }}
+        app: {{ .Chart.Name }}{{ .Values.nameSuffix }}
     spec:
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}{{ .Values.nameSuffix }}
           image: gcr.io/ipc-containerdays/{{ .Chart.Name }}:{{ .Values.image.tag }}
           env:
             - name: DOMAIN
