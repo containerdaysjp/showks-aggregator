@@ -158,7 +158,7 @@ async function getInstanceList() {
     let instance = instances[key];
     let id = instance.id;
     try {
-      let authorCache = await fetchRemote(id, '/author', true, { encoding: 'utf8', json: true });
+      let authorCache = await fetchRemote(id, '/author', false, { encoding: 'utf8', json: true });
       if (instance.linkUrl === undefined) {
         instance.linkUrl = await fetchLinkUrl(id);
       }
