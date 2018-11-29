@@ -1,6 +1,6 @@
 # showKs Aggregator
 
-Japan Container Days - showKs Aggregator is a server application which aggregates deployed container information and let clients access the data via Socket.io channel.
+Japan Container Days - showKs Aggregator is a server application which aggregates deployed showks-canvas container information and let clients access the data via Socket.io channel. It also caches canvas thumbnail for better performance.
 
 ## How to use
 
