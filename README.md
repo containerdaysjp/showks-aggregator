@@ -25,10 +25,30 @@ Open http://\<your host\>:8081 with a web browser.
 | Endpoint | Description |
 |----------|-------------|
 | /instances    | List all available instances (JSON) |
+| /\<ID\>       | Instance metadata (JSON) specified with \<ID\> |
 | /\<ID\>/thumbnail | Canvas thumbnail (PNG) of the container specified with \<ID\>  |
-| /\<ID\>/author    | Author information (JSON) of the container specified with \<ID\> |
 
-[See showKs-webapp README for the author JSON format](https://github.com/containerdaysjp/showks-webapp)
+### JSON Format
+
+/instances:
+```
+[ instance1, instance2, ... ]
+```
+
+/\<ID\>: instance
+
+instance:
+```
+{
+    id: "Instance ID",
+    linkUrl: "Public URL to the instance",
+    thumbnailUrl: "Thumbnail image path from the web root",
+    author: "Author JSON*",
+    createdAt: "Created time in number of milliseconds since 1970/01/01"
+}
+```
+
+[* See showKs-webapp README for the author JSON format](https://github.com/containerdaysjp/showks-webapp)
 
 
 ### Socket.IO Namespaces

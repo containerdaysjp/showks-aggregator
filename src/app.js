@@ -150,29 +150,33 @@ async function fetchRemote(id, path, onlyIfCached, options) {
   return cache;
 }
 
+async function getInstanceJSON(instance) {
+  let id = instance.id;
+  let authorCache = await fetchRemote(id, '/author', false, { encoding: 'utf8', json: true });
+  if (instance.linkUrl === undefined) {
+    instance.linkUrl = await fetchLinkUrl(id);
+  }
+  return {
+    id: id,
+    linkUrl: instance.linkUrl,
+    thumbnailUrl: instance.thumbnailUrl,
+    author: authorCache.data,
+    createdAt: instance.createdAt
+  }
+}
+
 // Generate instance array ordered by createdAt desc
 async function getInstanceList() {
   let list = [];
   let keys = Object.keys(instances);
   for (let key of keys) {
     let instance = instances[key];
-    let id = instance.id;
     try {
-      let authorCache = await fetchRemote(id, '/author', false, { encoding: 'utf8', json: true });
-      if (instance.linkUrl === undefined) {
-        instance.linkUrl = await fetchLinkUrl(id);
-      }
-      let item = {
-        id: id,
-        linkUrl: instance.linkUrl,
-        thumbnailUrl: instance.thumbnailUrl,
-        author: authorCache.data,
-        createdAt: instance.createdAt
-      }
+      let item = await getInstanceJSON(instance);
       list.push(item);
     } catch (err) {
       // simply ignore the instance
-      console.log(`An error occurred on processing item ${id}`);
+      console.log(`An error occurred on processing item ${instance.id}`);
       console.log(err);
     }
   };
@@ -184,7 +188,7 @@ async function getInstanceList() {
 
 // Response to the HTTP client with remote data
 async function responseRemote(req, res, path, onlyIfCached, options) {
-  console.log(`/${req.params.id}${path} called`);
+  console.log(`/${req.params.id}${path} was requested`);
   let id = req.params.id;
   try {
     // Fetch remote data
@@ -215,6 +219,7 @@ app.use(express.static(__dirname + '/public'));
 // GET /instances
 app.get('/instances', async function (req, res) {
   try {
+    console.log(`/instances was requested`);
     let list = await getInstanceList();
     res.type("json");
     res.send(JSON.stringify(list));
@@ -225,14 +230,24 @@ app.get('/instances', async function (req, res) {
   }
 })
 
-// GET /thumbnail
-app.get('/:id/thumbnail', function (req, res) {
-  responseRemote(req, res, '/thumbnail', false, { encoding: null, json: false });
+// GET /:id
+app.get('/:id', async function (req, res) {
+  console.log(`/${req.params.id} was requested`);
+  let id = req.params.id;
+  try {
+    let item = await getInstanceJSON(instances[id]);
+    res.type("json");
+    res.send(JSON.stringify(item));
+  } catch (err) {
+    console.log(`An error occurred on getting instance in /${id}`);
+    console.log(err);
+    res.status(404).send("Page not found")
+  }
 })
 
-// GET /author
-app.get('/:id/author', function (req, res) {
-  responseRemote(req, res, '/author', true, { encoding: 'utf8', json: true });
+// GET /:id/thumbnail
+app.get('/:id/thumbnail', function (req, res) {
+  responseRemote(req, res, '/thumbnail', false, { encoding: null, json: false });
 })
 
 
