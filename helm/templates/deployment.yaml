@@ -25,7 +25,7 @@ spec:
                   name: showks-config
                   key: domain
             - name: ALLOW_HOST
-              value: http://portal$(DOMAIN)
+              value: https://portal$(DOMAIN)
           ports:
             - name: app-port
               containerPort: 8081
