@@ -7,6 +7,7 @@ const CACHE_MAX_AGE = {
   '/thumbnail' : 6000
 };
 
+const version = process.env.npm_package_version;
 const got = require('got');
 const express = require('express');
 const app = express();
@@ -218,10 +219,12 @@ app.use(function(req, res, next) {
 });
 
 // GET /
-app.use(express.static(__dirname + '/public'));
+app.get('/', function(req, res) {
+  res.send(`showKs Aggregator version ${version}`);
+});
 
 // GET /instances
-app.get('/instances', async function (req, res) {
+app.get('/instances', async function(req, res) {
   try {
     console.log(`/instances was requested`);
     let list = await getInstanceList();
@@ -235,7 +238,7 @@ app.get('/instances', async function (req, res) {
 })
 
 // GET /:id
-app.get('/:id', async function (req, res) {
+app.get('/:id', async function(req, res) {
   console.log(`/${req.params.id} was requested`);
   let id = req.params.id;
   try {
@@ -250,7 +253,7 @@ app.get('/:id', async function (req, res) {
 })
 
 // GET /:id/thumbnail
-app.get('/:id/thumbnail', function (req, res) {
+app.get('/:id/thumbnail', function(req, res) {
   responseRemote(req, res, '/thumbnail', { encoding: null, json: false });
 })
 
