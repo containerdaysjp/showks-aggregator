@@ -2,8 +2,12 @@
 
 const K8S_NAMESPACE = 'showks';
 const K8S_LABEL_SELECTOR = 'class=showks-canvas';
-const REFRESH_THRESHOLD = 6000;
+const CACHE_MAX_AGE = {
+  '/author' : 30000,
+  '/thumbnail' : 6000
+};
 
+const version = process.env.npm_package_version;
 const got = require('got');
 const express = require('express');
 const app = express();
@@ -64,9 +68,10 @@ function getValidCache(id, path, timestamp) {
     return undefined;
   }
   let cache = instanceCache[id][path];
+  let maxAge = CACHE_MAX_AGE[path];
   if (
     cache === undefined ||
-    REFRESH_THRESHOLD < (timestamp - cache.lastFetched)) {
+    maxAge < (timestamp - cache.lastFetched)) {
       console.log(`Cache has been expired for ${id}, ${path}`);
       return undefined;
   }
@@ -141,8 +146,8 @@ function getInstanceDetails(obj) {
 }
 
 // Fetch remote data
-async function fetchRemote(id, path, onlyIfCached, options) {
-  let cache = getValidCache(id, path, onlyIfCached ? 0 : Date.now());
+async function fetchRemote(id, path, options) {
+  let cache = getValidCache(id, path, Date.now());
   if (cache === undefined) {
     const response = await requestInstance(id, path, options);
     cache = setCache(id, path, Date.now(), response.headers['content-type'], response.body);
@@ -152,7 +157,7 @@ async function fetchRemote(id, path, onlyIfCached, options) {
 
 async function getInstanceJSON(instance) {
   let id = instance.id;
-  let authorCache = await fetchRemote(id, '/author', false, { encoding: 'utf8', json: true });
+  let authorCache = await fetchRemote(id, '/author', { encoding: 'utf8', json: true });
   if (instance.linkUrl === undefined) {
     instance.linkUrl = await fetchLinkUrl(id);
   }
@@ -187,12 +192,12 @@ async function getInstanceList() {
 }
 
 // Response to the HTTP client with remote data
-async function responseRemote(req, res, path, onlyIfCached, options) {
+async function responseRemote(req, res, path, options) {
   console.log(`/${req.params.id}${path} was requested`);
   let id = req.params.id;
   try {
     // Fetch remote data
-    let cache = await fetchRemote(id, path, onlyIfCached, options);
+    let cache = await fetchRemote(id, path, options);
 
     // Response to the client
     res.set('Content-type', cache.contentType);
@@ -214,10 +219,12 @@ app.use(function(req, res, next) {
 });
 
 // GET /
-app.use(express.static(__dirname + '/public'));
+app.get('/', function(req, res) {
+  res.send(`showKs Aggregator version ${version}`);
+});
 
 // GET /instances
-app.get('/instances', async function (req, res) {
+app.get('/instances', async function(req, res) {
   try {
     console.log(`/instances was requested`);
     let list = await getInstanceList();
@@ -231,7 +238,7 @@ app.get('/instances', async function (req, res) {
 })
 
 // GET /:id
-app.get('/:id', async function (req, res) {
+app.get('/:id', async function(req, res) {
   console.log(`/${req.params.id} was requested`);
   let id = req.params.id;
   try {
@@ -246,8 +253,8 @@ app.get('/:id', async function (req, res) {
 })
 
 // GET /:id/thumbnail
-app.get('/:id/thumbnail', function (req, res) {
-  responseRemote(req, res, '/thumbnail', false, { encoding: null, json: false });
+app.get('/:id/thumbnail', function(req, res) {
+  responseRemote(req, res, '/thumbnail', { encoding: null, json: false });
 })
 
 
@@ -328,8 +335,10 @@ function watchService(resourceVersion) {
         if (error) {
           console.log('An error occurred in the watch callback');
           console.log(error);
+        } else {
+          console.log('Watch terminated normally');
         }
-        console.log('Watch terminated. Aborting...');
+        console.log('Aborting...');
         process.exit(1);
     });
 }
