@@ -126,7 +126,7 @@ function getServiceUrl(obj) {
 }
 
 function getLinkUrl(obj) {
-  return `http://${obj.spec.rules[0].host}`;
+  return `https://${obj.spec.rules[0].host}`;
 }
 
 function getCreationTimestamp(obj) {
