@@ -6,6 +6,7 @@ const CACHE_MAX_AGE = {
   '/author' : 30000,
   '/thumbnail' : 6000
 };
+const HTTP_REQUEST_TIMEOUT = 1500; // got timeout in milliseconds
 
 const version = process.env.npm_package_version;
 const got = require('got');
@@ -157,7 +158,7 @@ async function fetchRemote(id, path, options) {
 
 async function getInstanceJSON(instance) {
   let id = instance.id;
-  let authorCache = await fetchRemote(id, '/author', { encoding: 'utf8', json: true });
+  let authorCache = await fetchRemote(id, '/author', { encoding: 'utf8', json: true, timeout: HTTP_REQUEST_TIMEOUT });
   if (instance.linkUrl === undefined) {
     instance.linkUrl = await fetchLinkUrl(id);
   }
@@ -254,7 +255,7 @@ app.get('/:id', async function(req, res) {
 
 // GET /:id/thumbnail
 app.get('/:id/thumbnail', function(req, res) {
-  responseRemote(req, res, '/thumbnail', { encoding: null, json: false });
+  responseRemote(req, res, '/thumbnail', { encoding: null, json: false, timeout: HTTP_REQUEST_TIMEOUT });
 })
 
 
