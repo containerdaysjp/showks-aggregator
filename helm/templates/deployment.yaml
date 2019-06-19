@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: {{ .Chart.Name }}{{ .Values.nameSuffix }}
-          image: gcr.io/ipc-containerdays/{{ .Chart.Name }}:{{ .Values.image.tag }}
+          image: gcr.io/ipc-cloudnativedays/{{ .Chart.Name }}:{{ .Values.image.tag }}
           env:
             - name: DOMAIN
               valueFrom:
